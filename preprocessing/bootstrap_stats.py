@@ -4,18 +4,13 @@ import numpy as np
 import scipy as sp
 import math
 
-import seaborn as sns
 import pandas as pd
-from scipy.stats import pearsonr
-from scipy.stats import spearmanr
 
 import statsmodels.api as sm
 
 import random
 import itertools
 import time
-
-import matplotlib.pyplot as plt
 
 def nb_zero_prob(mu, r):
 	return (r / (r + mu)) ** r
@@ -80,94 +75,6 @@ def compute_all_stats(group1, group2, axis=-1):
 	stats_norm_10k = compute_diff_stats(mean_1_norm_10k, mean_2_norm_10k, var_1_norm_10k, var_2_norm_10k, n_cells_1, n_cells_2, r_1, r_2, np.count_nonzero(group1_norm_10k, axis=axis), np.count_nonzero(group2_norm_10k, axis=axis))
 	
 	return np.concatenate([stats, stats_norm, stats_norm_10k])
-
-def get_stats(df, suffix=''):
-	
-	df_stats = pd.DataFrame()
-	df_stats.index = df.index
-	df_stats[f'mean{suffix}'] = df.mean(axis=1)
-	df_stats[f'var{suffix}'] = df.var(axis=1)
-	df_stats[f'std{suffix}'] = df.std(axis=1)
-	df_stats[f'dispersion{suffix}'] = [df_stats[f'var{suffix}'][i]/df_stats[f'mean{suffix}'][i] if df_stats[f'mean{suffix}'][i] > 0 else np.nan for i in range(len(df_stats[f'var{suffix}']))]
-	df_stats[f'coeff_var{suffix}'] = [df_stats[f'std{suffix}'][i]/df_stats[f'mean{suffix}'][i] if df_stats[f'mean{suffix}'][i] > 0 else np.nan for i in range(len(df_stats[f'std{suffix}']))]
-	
-	for column in df_stats.columns:
-		df_stats[f'log_{column}'] = np.log(df_stats[column])
-	
-	return df_stats
-
-def compare_count_changes(df_counts_1, df_counts_2, counts_name_1, counts_name_2, full_comparison_name, path_out_dir):
-		
-	df_stats_1 = get_stats(df_counts_1, suffix='')
-	df_stats_2 = get_stats(df_counts_2, suffix='')
-	
-	df_stats_1.sort_index(inplace=True)
-	df_stats_2.sort_index(inplace=True)
-	
-	df_diff = df_stats_2 - df_stats_1
-	
-	# rename columns with diff
-	df_diff.columns = [f'{column}_diff' for column in df_diff.columns]
-	
-	##########
-	# EXPORT DIFF CSV
-	##########
-	path_out = os.path.join(path_out_dir, 'diff_expanded_data.csv')
-	df_diff.to_csv(path_out)
-	
-	return df_diff
-	
-def plot_results(df_return, statistic_functions, counts_name_1, normalization, comparison, path_out_dir):
-	
-	for i_stat, statistic_function in enumerate(statistic_functions):
-		
-		if 'zero_ratio' in statistic_function:
-			df_return[f'valid_{statistic_function}'] = np.where(
-				df_return[f'abs_value_{statistic_function}'] > df_return[f'ci_range_{statistic_function}'],
-				'red',
-				'blue'
-			)
-	
-		path_bootstrap_dir_plot = os.path.join(path_out_dir, normalization)
-			
-		if 'norm10k' in statistic_function:
-			path_bootstrap_dir_plot += '.normalized.gm10000'
-		elif 'norm' in statistic_function:
-			path_bootstrap_dir_plot += '.normalized.gmauto'
-			
-		path_bootstrap_dir_plot = os.path.join(path_bootstrap_dir_plot, comparison)
-		
-		# some values might be inf, so drop these for plotting
-		df_clean = df_return[[f'ci_range_{statistic_function}', f'value_{statistic_function}', 'xvalue', f'valid_{statistic_function}']].copy()
-		df_clean.replace([np.inf, -np.inf], np.nan, inplace=True)
-		df_clean.dropna(inplace=True)
-		
-		df_clean = df_clean.loc[df_clean['xvalue'] > 0]
-		
-		ci_ranges_clean = df_clean[f'ci_range_{statistic_function}']
-		xvalues_clean = df_clean['xvalue']
-		real_values_clean = df_clean[f'value_{statistic_function}']
-		colors_clean = df_clean[f'valid_{statistic_function}']
-		
-		path_out_png = os.path.join(path_bootstrap_dir_plot, f'{statistic_function}.png')
-		plt.scatter(np.log(xvalues_clean), real_values_clean, s=1, c=colors_clean)
-		plt.plot([min(np.log(xvalues_clean)), max(np.log(xvalues_clean))], [0, 0], color='red')
-		plt.title(f'{counts_name_1} Expression Mean vs.\n{comparison} {statistic_function}')
-		plt.xlabel(f'ln({counts_name_1} Expression Mean)')
-		plt.ylabel(f'Non-bootstrapped {comparison}\n{statistic_function}')
-		plt.tight_layout()
-		plt.savefig(path_out_png)
-		plt.close()
-		
-		path_out_png = os.path.join(path_bootstrap_dir_plot, f'{statistic_function}_95ci.png')
-		plt.scatter(np.log(xvalues_clean), ci_ranges_clean, s=1)
-		plt.title(f'{counts_name_1} Expression Mean vs.\n{statistic_function} 95% CI')
-		plt.xlabel(f'ln({counts_name_1} Expression Mean)')
-		plt.ylabel(f'{comparison}\n{statistic_function} 95% CI')
-		plt.tight_layout()
-		plt.savefig(path_out_png)
-		plt.close()
-	
 		
 def perform_bootstrap(np_counts_1, np_counts_2, statistic_functions, counts_name_1, normalization, comparison, path_out_dir):
 	
@@ -242,11 +149,11 @@ stat_functions = [
 ]
 	
 for normalization_method in normalization_methods:
-		
-	# this script is a bit wonky... we actually bootstrap counts first and
-	# only then normalize counts... so we skip the actually normalized ones
-	# we instead look at downsampled, non-downsampled things, etc.
+    
 	if 'raw' in normalization_method or 'normalized' in normalization_method:
+        # in this script we perform normalization as well, so there's no need
+        # to load this. just want a comparison between the different filtering
+        # and downsampling methods
 		continue
 	
 	path_normalization_dir = os.path.join(path_out_dir, normalization_method)
@@ -287,50 +194,39 @@ for normalization_method in normalization_methods:
 		
 		path_bootstrap_csv = os.path.join(path_comparison_dir, f'{normalization_method}.{comparison}.bootstrapstats.csv')
 		
-		if not os.path.exists(path_bootstrap_csv) or True:
-		
-			#######
-			# GET STATISTICS
-			#######
-			
-			print('loading counts...')
-			df_counts_1 = pd.read_parquet(path_counts_1)
-			df_counts_2 = pd.read_parquet(path_counts_2)
-			
-			df_counts_1 = df_counts_1.T
-			df_counts_2 = df_counts_2.T
-			
-			common_genes = list(set(df_counts_1.index).intersection(df_counts_2.index))
-			num_genes = len(common_genes)
-			
-			df_counts_1.drop([gene for gene in df_counts_1.index if gene not in common_genes], inplace=True)
-			df_counts_2.drop([gene for gene in df_counts_2.index if gene not in common_genes], inplace=True)
-			
-			df_diff = compare_count_changes(df_counts_1, df_counts_2, counts_name_1, counts_name_2, full_comparison_name, path_comparison_dir)
-			
-			print('bootstrapping')
-			
-			df_counts_1.sort_index(inplace=True)
-			df_counts_2.sort_index(inplace=True)
-			
-			# DO NOT REMOVE THIS, NEED FOR PROPER INDEXING!!!!
-			common_genes = df_counts_1.index
-			
-			# explicitly round floats resulting from normalization into ints 
-			np_counts_1 = df_counts_1.to_numpy()
-			np_counts_2 = df_counts_2.to_numpy()
-			
-			print(np.shape(np_counts_1))
-			print(np.shape(np_counts_2))
-			
-			df_bootstrap_stats = perform_bootstrap(np_counts_1, np_counts_2, stat_functions, counts_name_1, normalization_method, comparison, path_out_dir)
-			
-			df_bootstrap_stats.index = common_genes
-			path_bootstrap_csv = os.path.join(path_comparison_dir, f'{normalization_method}.{comparison}.bootstrapstats.csv')
-			df_bootstrap_stats.to_csv(path_bootstrap_csv)
-			
-		else:
-		
-			df_bootstrap_stats = pd.read_csv(path_bootstrap_csv)
-		
-		plot_results(df_bootstrap_stats, stat_functions, counts_name_1, normalization_method, comparison, path_out_dir)
+        #######
+        # Bootstrap
+        #######
+        
+        print('loading counts...')
+        df_counts_1 = pd.read_parquet(path_counts_1)
+        df_counts_2 = pd.read_parquet(path_counts_2)
+        
+        df_counts_1 = df_counts_1.T
+        df_counts_2 = df_counts_2.T
+        
+        common_genes = list(set(df_counts_1.index).intersection(df_counts_2.index))
+        num_genes = len(common_genes)
+        
+        df_counts_1.drop([gene for gene in df_counts_1.index if gene not in common_genes], inplace=True)
+        df_counts_2.drop([gene for gene in df_counts_2.index if gene not in common_genes], inplace=True)
+        
+        print('bootstrapping...')
+        
+        df_counts_1.sort_index(inplace=True)
+        df_counts_2.sort_index(inplace=True)
+        
+        # DO NOT REMOVE THIS, NEED FOR PROPER INDEXING!!!!
+        common_genes = df_counts_1.index
+         
+        np_counts_1 = df_counts_1.to_numpy()
+        np_counts_2 = df_counts_2.to_numpy()
+        
+        print(np.shape(np_counts_1))
+        print(np.shape(np_counts_2))
+        
+        df_bootstrap_stats = perform_bootstrap(np_counts_1, np_counts_2, stat_functions, counts_name_1, normalization_method, comparison, path_out_dir)
+        
+        df_bootstrap_stats.index = common_genes
+        path_bootstrap_csv = os.path.join(path_comparison_dir, f'{normalization_method}.{comparison}.bootstrapstats.csv')
+        df_bootstrap_stats.to_csv(path_bootstrap_csv)

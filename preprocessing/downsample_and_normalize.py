@@ -20,6 +20,20 @@ rcParams['text.usetex'] = False
 rcParams['svg.fonttype'] = 'none'
 import matplotlib.pyplot as plt
 
+############
+# This script performs different normalizations and downsamplings of 
+# transcript counts for testing and downstream processing
+
+# Input: design csv file, includes multiple h5 files from cellranger
+# Output: normalized transcript counts (csv, h5)
+
+# Pseudocode:
+# 1. Downsample cells in datasets to ensure same number of cells
+# 2. Downsample transcripts to ensure same distribution of transcript counts per cell
+# 3. Normalize per library size
+# 4. Plot and save output
+############
+
 def sc_load(path: str, sample: str):
 
 	if os.path.isdir(path):
