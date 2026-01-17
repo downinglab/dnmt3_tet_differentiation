@@ -168,11 +168,11 @@ void find_correlations(int *batch_pairs, int i_batch, int num_cells, int batch_s
 }
 
 // compilation
-// /usr/local/cuda-12.6/bin/nvcc -std=c++17 ./find_interactions_parquet.cu -o ./find_interactions_parquet -lparquet -larrow -lineinfo -lz
+// nvcc -std=c++17 ./find_interactions.cu -o ./find_interactions -lparquet -larrow -lineinfo -lz
 
 
 // usage
-// ./find_interactions_parquet -bs 50000000 -i ./counts.filtered.normalized.gmauto.parquet.gz -o ./gene_correlations/ --ranked
+// ./find_interactions -bs 50000000 -i ./counts.filtered.normalized.gmauto.parquet.gz -o ./gene_correlations/ --ranked
 
 int main(int argc, char** argv)
 {

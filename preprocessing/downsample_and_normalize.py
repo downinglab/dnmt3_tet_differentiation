@@ -87,7 +87,7 @@ def sc_load(path: str, sample: str):
 	
 	return adata
 	
-def sc_filter(adata, sample, path_hist_dir):
+def sc_filter(adata, sample, path_out_dir):
 
 	# Generate qc metrics
 	adata.var["mt"] = adata.var_names.str.startswith("MT-")
@@ -105,7 +105,8 @@ def sc_filter(adata, sample, path_hist_dir):
 		jitter=0.4,
 		multi_panel=True,
 	)
-	plt.savefig(os.path.join(path_hist_dir, f'{sample}.qc.png'))
+	plt.savefig(os.path.join(path_out_dir, f'{sample}.qc.png'))
+	plt.close()
 	
 	# Identify outliers per qc metric
 	adata.obs["counts_outlier"] = is_outlier(adata, "log1p_total_counts", 5)
@@ -154,11 +155,11 @@ def is_outlier(adata, metric: str, nmads: int):
 	
 	return outlier
 
-def plot_sequencing_depth(df, path_scatter_dir, prefix, outfile):
+def plot_sequencing_depth(df, filter_type, name, path_out_dir):
 	########
 	# PLOT DIFFERENT GENES vs. SUM TO CONFIRM NORMALIZATION SUCCESS
 	########
-	path_png = os.path.join(path_scatter_dir, f'sequencing_depth.{prefix}.{outfile}.png')
+	path_png = os.path.join(path_out_dir, f'sequencing_depth.{filter_type}.{name}.png')
 	sums = df.sum(axis=1)
 	
 	genes_to_plot = ['GAPDH', 'TPM3', 'SPCS1', 'SESN3', 'RAD9A']
@@ -172,23 +173,38 @@ def plot_sequencing_depth(df, path_scatter_dir, prefix, outfile):
 	plt.xlabel('log(Sequencing Depth) (Sum counts in cell)')
 	plt.ylabel('log(Gene Count in Cell + 1)')
 	plt.legend()
-	plt.title(f'{outfile} Sequencing Depth {prefix}')
+	plt.title(f'{name} Sequencing Depth {filter_type}')
 	plt.savefig(path_png, dpi=200)
 	plt.close()
 
-def plot_histogram(values, path_out, title):
-	sns.histplot(values)
-	plt.title(title)
-	plt.savefig(path_out)
-	plt.close()
+def qc_plots(dfs, names, filter_type, path_out_dir):
 
-def plot_histograms(df, path_hist_dir, filter_type, name):
+	path_plot = os.path.join(path_out_dir, filter_type)
+	os.makedirs(path_plot, exist_ok=True)
 	
-	filename = f"{name}_{filter_type}_gene_mean_hist.png"
-	plot_histogram(np.log(df.mean().tolist()), os.path.join(path_hist_dir, filename), title=f'{name} {filter_type} mean count hist for genes')
+	for df, name in zip(dfs, names):
+		plot_sequencing_depth(df, filter_type, name, path_plot)
 	
-	filename = f'{name}_{filter_type}_gene_max_hist.png'
-	plot_histogram(np.log(df.max().tolist()), os.path.join(path_hist_dir, filename), title=f'{name} {filter_type} maximum count hist for genes')
+	sum_data = []
+	for df, name in zip(dfs, names):
+		cell_sums = df.sum(axis=1)
+		temp_df = pd.DataFrame({
+			'sum': cell_sums,
+			'sample': name
+		})
+		sum_data.append(temp_df)
+	
+	dfs_concat = pd.concat(sum_data, ignore_index=True)
+	
+	sns.kdeplot(data=dfs_concat, x='sum', hue='sample', common_norm=False)
+	
+	plt.xlabel('Sum Transcripts in Cell')
+	plt.ylabel('Density')
+	plt.title(f'Sum of Transcripts in Cell {filter_type}')
+	
+	path_png = os.path.join(path_plot, f'transcripts_per_cell.{filter_type}.png')
+	plt.savefig(path_png, dpi=200)
+	plt.close()
 
 def normalize(df, grand_median=None):
 	# normalize library size as per the first part of https://kb.10xgenomics.com/hc/en-us/articles/115004583806-How-are-the-UMI-counts-normalized-before-PCA-and-differential-expression-
@@ -204,92 +220,37 @@ def normalize(df, grand_median=None):
 	
 	return df_normalized, grand_median
 
-def get_stats(df):
-	
-	df_stats = pd.DataFrame()
-	df_stats['mean'] = df.mean()
-	df_stats['var'] = df.var()
-	df_stats['std'] = df.std()
-	df_stats['dispersion'] = [df_stats['var'].iloc[i]/df_stats['mean'].iloc[i] if df_stats['mean'].iloc[i] > 0 else 0 for i in range(len(df_stats['var']))]
-	df_stats['coeff_var'] = [df_stats['std'].iloc[i]/df_stats['mean'].iloc[i] if df_stats['mean'].iloc[i] > 0 else 0 for i in range(len(df_stats['std']))]
-	df_stats['gene'] = df.columns
-	
-	for column in df_stats.columns:
-		if column != 'gene':
-			df_stats[f'log_{column}'] = np.log(df_stats[column])
-			
-	return df_stats
-
-def plot_cv_mean(df_stats, path_scatter_dir, prefix, outfile):
-	
-	# just want to compare mean to everything else
-	stats_comparisons = [['log_mean', 'log_coeff_var']]
-	
-	for comparison in stats_comparisons:
-	
-		filename_scatter = f'scatter.{comparison[0]}.{comparison[1]}.{prefix}.{outfile}.png'
-		title = f'{outfile} {comparison[0]} vs {comparison[1]} for {prefix}'
-		
-		if comparison[1] == 'log_coeff_var':
-			xlim = [-6, 6]
-			ylim = [-2, 4]
-		else:
-			xlim = None
-			ylim = None
-			
-		path_png = os.path.join(path_scatter_dir, filename_scatter)
-		sns.scatterplot(data=df_stats, x=comparison[0], y=comparison[1], s=2, linewidth=0)
-		plt.xlim(xlim)
-		plt.ylim(ylim)
-		plt.title(title)
-		plt.savefig(path_png)
-		plt.close()
-		
-	return df_stats
-
-def normalize_plot_save(df, filter_type, name):
+def normalize_and_save(df, filter_type, name, path_out_dir):
 	
 	df_normalized, grand_median = normalize(df)
 	df_normalized_10k, grand_median_10k = normalize(df, grand_median=10000)
+
+	os.makedirs(os.path.join(path_out_dir, f'{filter_type}.normalized.gmauto'), exist_ok=True)
+	os.makedirs(os.path.join(path_out_dir, f'{filter_type}.normalized.gm10000'), exist_ok=True)
+	os.makedirs(os.path.join(path_out_dir, f'{filter_type}'), exist_ok=True)
 	
-	df_stats = get_stats(df)
-	df_stats_normalized = get_stats(df_normalized)
-	df_stats_normalized_10k = get_stats(df_normalized_10k)
-	
-	plot_cv_mean(df_stats, path_scatter_dir, filter_type, name)
-	plot_cv_mean(df_stats_normalized, path_scatter_dir, f'{filter_type}.normalized.gmauto', name)
-	plot_cv_mean(df_stats_normalized_10k, path_scatter_dir, f'{filter_type}.normalized.gm10000', name)
-	
-	plot_histograms(df, path_hist_dir, filter_type, name)
-	plot_histograms(df_normalized, path_hist_dir, f'{filter_type}.normalized.gmauto', name)
-	plot_histograms(df_normalized_10k, path_hist_dir, f'{filter_type}.normalized.gm10000', name)
-	
-	plot_sequencing_depth(df, path_scatter_dir, filter_type, name)
-	
-	path_csv = os.path.join(path_out_counts_dir, f'{name}.{filter_type}.normalized.gmauto.parquet.gz')
+	path_csv = os.path.join(path_out_dir, f'{filter_type}.normalized.gmauto', f'{name}.{filter_type}.normalized.gmauto.parquet.gz')
 	df_normalized.to_parquet(path_csv, compression='gzip')
 	
-	path_csv = os.path.join(path_out_counts_dir, f'{name}.{filter_type}.normalized.gm10000.parquet.gz')
+	path_csv = os.path.join(path_out_dir, f'{filter_type}.normalized.gm10000', f'{name}.{filter_type}.normalized.gm10000.parquet.gz')
 	df_normalized_10k.to_parquet(path_csv, compression='gzip')
 	
-	path_csv = os.path.join(path_out_counts_dir, f'{name}.{filter_type}.parquet.gz')
+	path_csv = os.path.join(path_out_dir, f'{filter_type}', f'{name}.{filter_type}.parquet.gz')
 	df.to_parquet(path_csv, compression='gzip')
 	
 	adata = ad.AnnData(df)
 	
-	path_h5ad = os.path.join(path_out_counts_dir, f'{name}.{filter_type}.h5ad')
+	path_h5ad = os.path.join(path_out_dir, f'{filter_type}', f'{name}.{filter_type}.h5ad')
 	adata.write_h5ad(path_h5ad, compression='gzip')	
 	
-def ultra_optimized_downsample(downsampled_dfs, names, min_cell_sums):
-	"""Ultra-optimized version using pure NumPy operations where possible"""
-	
-	print('Ultra-optimized downsampling...')
+def downsample_transcripts(downsampled_dfs, names, min_cell_sums):
+
+	dfs_return = []
 	
 	for i_df, df in enumerate(downsampled_dfs):
 		outfile = names[i_df]
 		sums = df._sums.values
 		
-		# Work directly with numpy arrays
 		data = df.values.astype(np.int32)
 		n_cells, n_genes = data.shape
 		
@@ -327,7 +288,9 @@ def ultra_optimized_downsample(downsampled_dfs, names, min_cell_sums):
 		
 		# Create result dataframe
 		result_df = pd.DataFrame(data=data, index=df.index, columns=df.columns)
-		normalize_plot_save(result_df, 'filtered.samecg.downsampled', outfile)
+		dfs_return.append(result_df)
+
+	return dfs_return
 
 parser = argparse.ArgumentParser()
 
@@ -341,16 +304,6 @@ path_out_dir = args.path_out_dir
 
 df_input = pd.read_csv(path_input_csv)
 
-path_plot_dir = path_out_dir
-
-path_scatter_dir = os.path.join(path_plot_dir, 'scatter')
-path_hist_dir = os.path.join(path_plot_dir, 'histogram')
-path_out_counts_dir = os.path.join(path_plot_dir, 'transcript_counts')
-
-os.makedirs(path_hist_dir, exist_ok=True)
-os.makedirs(path_scatter_dir, exist_ok=True)
-os.makedirs(path_out_counts_dir, exist_ok=True)
-
 paths = list(df_input['path'])
 names = list(df_input['name'])
 
@@ -360,16 +313,20 @@ names = list(df_input['name'])
 adatas = [sc_load(path, name) for path, name in zip(paths, names)]
 
 for adata, name in zip(adatas, names):
-	normalize_plot_save(adata.to_df(), 'raw', name)
+	normalize_and_save(adata.to_df(), 'raw', name, path_out_dir)
+    
+qc_plots([adata.to_df() for adata in adatas], names, 'raw', path_out_dir)
 	
 ###########
 # FILTERED
 ###########
-adatas = [sc_filter(adata, name, path_hist_dir) for adata, name in zip(adatas, names)]
+adatas = [sc_filter(adata, name, path_out_dir) for adata, name in zip(adatas, names)]
 
 # do separate filtered plotting
 for adata, name in zip(adatas, names):
-	normalize_plot_save(adata.to_df(), 'filtered', name)
+	normalize_and_save(adata.to_df(), 'filtered', name, path_out_dir)
+
+qc_plots([adata.to_df() for adata in adatas], names, 'filtered', path_out_dir)
 	
 ################
 # SAME CELL/GENE - OPTIMIZED
@@ -394,13 +351,14 @@ for i, df in enumerate(downsampled_dfs):
 
 # Filtered plotting
 for df, name in zip(downsampled_dfs, names):
-	normalize_plot_save(df, 'filtered.samecg', name)
+	normalize_and_save(df, 'filtered.samecg', name, path_out_dir)
+
+qc_plots(downsampled_dfs, names, 'filtered.samecg', path_out_dir)
 
 ##############
-# OPTIMIZED DOWNSAMPLING
+# DOWNSAMPLING TRANSCRIPTS
 ##############
 print('calculating sums and sorting...')
-# Calculate sums more efficiently and sort
 for i, df in enumerate(downsampled_dfs):
 	df_sums = df.sum(axis=1)
 	# Sort both dataframe and sums together
@@ -414,4 +372,9 @@ for i, df in enumerate(downsampled_dfs):
 min_cell_sums = np.minimum.reduce([df._sums.values for df in downsampled_dfs])
 
 print('downsampling transcripts...')
-ultra_optimized_downsample(downsampled_dfs, names, min_cell_sums)
+downsampled_dfs = downsample_transcripts(downsampled_dfs, names, min_cell_sums)
+
+for df, name in zip(downsampled_dfs, names):
+	normalize_and_save(df, 'filtered.samecg.downsampled', name, path_out_dir)
+
+qc_plots(downsampled_dfs, names, 'filtered.samecg.downsampled', path_out_dir)
