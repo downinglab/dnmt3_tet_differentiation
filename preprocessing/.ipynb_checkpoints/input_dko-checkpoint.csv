@@ -1,4 +1,0 @@
-name,path
-wt_rep1,/home/data/Shared/shared_datasets/sc_rna_seq/nlaszik/wt_atrinh_112823/HUES64_WT_Rep1_count_hg19/outs/filtered_feature_bc_matrix.h5
-wt_rep2,/home/data/Shared/shared_datasets/sc_rna_seq/nlaszik/wt_atrinh_112823/HUES64_WT_Rep2_count_hg19/outs/filtered_feature_bc_matrix.h5
-dko_rep2,/home/data/Shared/shared_datasets/sc_rna_seq/nlaszik/dko_atrinh_102022/cellranger/DKO_2_count_hg19/outs/filtered_feature_bc_matrix.h5
