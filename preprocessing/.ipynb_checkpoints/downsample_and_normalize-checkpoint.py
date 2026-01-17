@@ -34,6 +34,11 @@ import matplotlib.pyplot as plt
 # 4. Plot and save output
 ############
 
+# Usage:
+
+#python preprocessing/downsample_and_normalize.py -path_input_csv preprocessing/input_tko.csv -path_out_dir transcript_counts/wt_tko
+#python preprocessing/downsample_and_normalize.py -path_input_csv preprocessing/input_dko.csv -path_out_dir transcript_counts/wt_dko
+
 def sc_load(path: str, sample: str):
 
 	if os.path.isdir(path):
@@ -78,7 +83,7 @@ def sc_load(path: str, sample: str):
 	print(adata.obs)
 	print(adata.var)
 	
-	adata.var_names_make_unique()
+	adata.var_names_make_unique(join='_dup_')
 	
 	return adata
 	

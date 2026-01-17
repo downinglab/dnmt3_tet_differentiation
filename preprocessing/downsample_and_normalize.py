@@ -34,6 +34,11 @@ import matplotlib.pyplot as plt
 # 4. Plot and save output
 ############
 
+# Usage:
+
+#python preprocessing/downsample_and_normalize.py -path_input_csv preprocessing/input_tko.csv -path_out_dir transcript_counts/wt_tko
+#python preprocessing/downsample_and_normalize.py -path_input_csv preprocessing/input_dko.csv -path_out_dir transcript_counts/wt_dko
+
 def sc_load(path: str, sample: str):
 
 	if os.path.isdir(path):
@@ -78,7 +83,7 @@ def sc_load(path: str, sample: str):
 	print(adata.obs)
 	print(adata.var)
 	
-	adata.var_names_make_unique()
+	adata.var_names_make_unique(join='_dup_')
 	
 	return adata
 	
@@ -205,8 +210,8 @@ def get_stats(df):
 	df_stats['mean'] = df.mean()
 	df_stats['var'] = df.var()
 	df_stats['std'] = df.std()
-	df_stats['dispersion'] = [df_stats['var'][i]/df_stats['mean'][i] if df_stats['mean'][i] > 0 else 0 for i in range(len(df_stats['var']))]
-	df_stats['coeff_var'] = [df_stats['std'][i]/df_stats['mean'][i] if df_stats['mean'][i] > 0 else 0 for i in range(len(df_stats['std']))]
+	df_stats['dispersion'] = [df_stats['var'].iloc[i]/df_stats['mean'].iloc[i] if df_stats['mean'].iloc[i] > 0 else 0 for i in range(len(df_stats['var']))]
+	df_stats['coeff_var'] = [df_stats['std'].iloc[i]/df_stats['mean'].iloc[i] if df_stats['mean'].iloc[i] > 0 else 0 for i in range(len(df_stats['std']))]
 	df_stats['gene'] = df.columns
 	
 	for column in df_stats.columns:

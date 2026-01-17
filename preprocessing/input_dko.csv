@@ -1,0 +1,4 @@
+name,path
+wt_rep1,transcript_counts/GSM9438865_wt_1_filtered_feature_bc_matrix.h5
+wt_rep2,transcript_counts/GSM9438865_wt_2_filtered_feature_bc_matrix.h5
+dko_rep2,transcript_counts/GSM9438866_dko_2_filtered_feature_bc_matrix.h5
